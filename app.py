@@ -61,7 +61,7 @@ if uploaded_file and st.button("🚀 ابدأ معالجة المنيو"):
                 prompt = f"قم بترجمة المنيو وفق نظام المرآة الصارم وتنسيق JSON:\n{cleaned_df.to_json(orient='records')}"
                 
                 response = client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-3.6-flash',
                     contents=prompt,
                     config=types.GenerateContentConfig(system_instruction=MASTER_SYSTEM_INSTRUCTION, response_mime_type="application/json")
                 )
