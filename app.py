@@ -30,7 +30,6 @@ def apply_local_rules(df):
     clarifications, cleaned_rows = [], []
     df.columns = df.columns.str.strip().str.lower()
     
-    # قائمة المحظورات الشاملة عشان ميعديش أي حاجة
     banned_words = ['bacon', 'pork', 'wine', 'alcohol', 'beer', 'vodka', 'rum', 'ham', 'liquor',
                     'خنزير', 'كحول', 'بيرة', 'نبيذ', 'فودكا', 'بيكون', 'هام']
     
@@ -45,7 +44,7 @@ def apply_local_rules(df):
             
         text_full = f"{item_name} {desc}".lower()
         
-        # الفلترة الأمنية
+        # الفلترة الأمنية فقط للخنزير والكحول
         has_banned = False
         for w in banned_words:
             if w in text_full:
@@ -55,18 +54,8 @@ def apply_local_rules(df):
         
         if has_banned:
             continue
-            
-        try:
-            check_price = str(price).replace(',', '').strip()
-            if check_price.lower() in ['-', '', 'nan', 'n/a']:
-                check_price = '0'
-            if float(check_price) <= 0:
-                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "سعر غير صالح (0)"})
-                continue
-        except: 
-            pass
 
-        # لو الوصف فاضي، امسح كلمة nan عشان الذكاء ميألفش
+        # تم إلغاء حذف الأصناف التي سعرها صفر بناءً على طلبك
         if desc.lower() in ['nan', 'none', '']:
             desc = ''
 
