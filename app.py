@@ -7,7 +7,6 @@ from google.genai import types
 
 st.set_page_config(page_title="منصة معالجة المنيو الآلية", page_icon="🍔", layout="wide")
 
-# هنا تم وضع الـ Terminology والـ Knowledge Base بالكامل مع الحماية البرمجية
 MASTER_SYSTEM_INSTRUCTION = """
 أنت محرك معالجة منيو آلي يعمل وفق نظام "المرآة الصارم" (Strict Mirror Protocol).
 القواعد الإلزامية والمعرفية (Knowledge Base & Terminology):
@@ -47,10 +46,15 @@ def apply_local_rules(df):
             clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "Forbidden ingredients"})
             continue
         try:
-            if float(price) <= 0:
-                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "Suspicious price (0)"})
+            # محاولة تحويل السعر لرقم لمعرفة إذا كان صفر أو سالب
+            check_price = str(price).replace(',', '').strip()
+            if check_price in ['-', '', 'nan', 'N/A']:
+                check_price = '0'
+            if float(check_price) <= 0:
+                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "Suspicious price (0 or less)"})
                 continue
-        except: pass
+        except: 
+            pass
 
         cleaned_rows.append({'category': cat, 'item': item_name, 'description': desc, 'price': price})
     return pd.DataFrame(cleaned_rows), pd.DataFrame(clarifications)
@@ -89,7 +93,13 @@ if uploaded_file and st.button("🚀 ابدأ معالجة المنيو"):
                         item_a = row.get('item_arb', '')
                         desc_e = row.get('desc_eng', '')
                         desc_a = row.get('desc_arb', '')
-                        prc = float(row.get('price', 0))
+                        
+                        # حماية السعر من النصوص والشرطات (-)
+                        raw_price = str(row.get('price', '0')).replace(',', '').strip()
+                        try:
+                            prc = float(raw_price) if raw_price not in ['-', '', 'nan', 'null'] else 0.0
+                        except:
+                            prc = 0.0
                         
                         if cat_e not in sec_map:
                             sec_map[cat_e] = sec_counter
