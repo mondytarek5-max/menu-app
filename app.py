@@ -9,14 +9,13 @@ st.set_page_config(page_title="منصة معالجة المنيو الآلية",
 
 MASTER_SYSTEM_INSTRUCTION = """
 أنت محرك معالجة منيو آلي يعمل وفق نظام "المرآة الصارم" (Strict Mirror Protocol).
-القواعد الإلزامية والمعرفية (Knowledge Base & Terminology):
+القواعد الإلزامية:
 1. المرجعية: الإمارات/الخليج الإنجليزية أصل، مصر/الأردن العربية أصل.
-2. نظام المرآة: ترجمة كلمة مقابل كلمة بدقة متناهية دون حشو أو اجتهاد.
+2. نظام المرآة: ترجمة كلمة مقابل كلمة بدقة متناهية دون حشو. (تحذير: إذا كان وصف الصنف فارغاً، اتركه فارغاً ولا تقم بتأليف أي وصف من عندك إطلاقاً).
 3. معجم المصطلحات: Lime->حامض, Bun->كيزر, Patty->قطعة, Tangy->منعش, Simmered->على البخار, Steamed->على البخار, Fritters->فطير مقلي, Flatbread->خبز مسطح, Gravy->جريفي, Dip->تغميس / صوص.
-4. الأرقام: تُكتب بصيغة إنجليزية (1, 2, 3...) في النصوص العربية والإنجليزية.
-5. صيغة الرد الإلزامية: يجب أن ترجع البيانات بصيغة JSON Array وكل عنصر فيه المفاتيح التالية فقط بالحروف الإنجليزية الصغيرة:
+4. الأرقام بصيغة إنجليزية (1, 2, 3...) في النصوص العربية والإنجليزية.
+5. الرد يجب أن يكون JSON Array يحتوي فقط على المفاتيح:
 "category_eng", "category_arb", "item_eng", "item_arb", "desc_eng", "desc_arb", "price"
-أي مفاتيح أخرى ستؤدي لفشل النظام.
 """
 
 st.title("🍔 منصة معالجة المنيو الآلية")
@@ -31,30 +30,45 @@ def apply_local_rules(df):
     clarifications, cleaned_rows = [], []
     df.columns = df.columns.str.strip().str.lower()
     
+    # قائمة المحظورات الشاملة عشان ميعديش أي حاجة
+    banned_words = ['bacon', 'pork', 'wine', 'alcohol', 'beer', 'vodka', 'rum', 'ham', 'liquor',
+                    'خنزير', 'كحول', 'بيرة', 'نبيذ', 'فودكا', 'بيكون', 'هام']
+    
     for idx, row in df.iterrows():
         item_name = str(row.get('item', row.get('name', row.get('item name', row.get('اسم الصنف', row.get('الاسم', '')))))).strip()
         desc = str(row.get('description', row.get('desc', row.get('الوصف', '')))).strip()
         price = row.get('price', row.get('السعر', 0))
         cat = str(row.get('category', row.get('القسم', row.get('تصنيف', 'Main')))).strip()
         
-        if item_name == 'nan' or item_name == '':
+        if item_name.lower() in ['nan', '', 'none']:
             continue
             
         text_full = f"{item_name} {desc}".lower()
         
-        if any(w in text_full for w in ['bacon', 'pork', 'wine', 'alcohol', 'خنزير', 'كحول']):
-            clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "Forbidden ingredients"})
+        # الفلترة الأمنية
+        has_banned = False
+        for w in banned_words:
+            if w in text_full:
+                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": f"مكون محظور ({w})"})
+                has_banned = True
+                break
+        
+        if has_banned:
             continue
+            
         try:
-            # محاولة تحويل السعر لرقم لمعرفة إذا كان صفر أو سالب
             check_price = str(price).replace(',', '').strip()
-            if check_price in ['-', '', 'nan', 'N/A']:
+            if check_price.lower() in ['-', '', 'nan', 'n/a']:
                 check_price = '0'
             if float(check_price) <= 0:
-                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "Suspicious price (0 or less)"})
+                clarifications.append({"Item Name": item_name, "Action": "Removed", "Reason": "سعر غير صالح (0)"})
                 continue
         except: 
             pass
+
+        # لو الوصف فاضي، امسح كلمة nan عشان الذكاء ميألفش
+        if desc.lower() in ['nan', 'none', '']:
+            desc = ''
 
         cleaned_rows.append({'category': cat, 'item': item_name, 'description': desc, 'price': price})
     return pd.DataFrame(cleaned_rows), pd.DataFrame(clarifications)
@@ -66,16 +80,16 @@ if uploaded_file and st.button("🚀 ابدأ معالجة المنيو"):
     if not api_key:
         st.error("يرجى إدخال مفتاح API Key في القائمة الجانبية أولاً!")
     else:
-        with st.spinner("جاري قراءة الملف وتطبيق المعجم والترجمة..."):
+        with st.spinner("جاري قراءة الملف وتطبيق الترجمة الصارمة..."):
             try:
                 raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
                 cleaned_df, clarifications_df = apply_local_rules(raw_df)
                 
                 if cleaned_df.empty:
-                    st.error("❌ الكود مش قادر يشوف المنيو! تأكد إن العواميد في ملفك اسمها (Item, Price, Category) أو (اسم الصنف، السعر، القسم).")
+                    st.error("❌ الكود مش قادر يشوف المنيو! تأكد إن العواميد فيها بيانات صحيحة.")
                 else:
                     client = genai.Client(api_key=api_key)
-                    prompt = f"قم بترجمة المنيو التالي وفق نظام المرآة الصارم وأعد الناتج بتنسيق JSON حصراً:\n{cleaned_df.to_json(orient='records')}"
+                    prompt = f"قم بترجمة المنيو التالي وفق نظام المرآة الصارم. إذا كان الوصف (Description) فارغاً، لا تكتب أي وصف من عندك إطلاقاً. أعد الناتج بتنسيق JSON حصراً:\n{cleaned_df.to_json(orient='records')}"
                     
                     response = client.models.generate_content(
                         model='gemini-3.6-flash',
@@ -94,7 +108,6 @@ if uploaded_file and st.button("🚀 ابدأ معالجة المنيو"):
                         desc_e = row.get('desc_eng', '')
                         desc_a = row.get('desc_arb', '')
                         
-                        # حماية السعر من النصوص والشرطات (-)
                         raw_price = str(row.get('price', '0')).replace(',', '').strip()
                         try:
                             prc = float(raw_price) if raw_price not in ['-', '', 'nan', 'null'] else 0.0
